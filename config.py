@@ -1,0 +1,2 @@
+DB_PASSWORD = "Verma@12345"
+NO_OF_IMAGE = 50
