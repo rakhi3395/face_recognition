@@ -57,69 +57,6 @@ class CameraApp:
 
 
 
-
-
-    # def face_recog(self):
-    #     faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
-    #     clf = cv2.face.LBPHFaceRecognizer_create()
-    #     clf.read("models/classifier.xml")
-        
-    #     video_cap = cv2.VideoCapture(camera_ip)
-    #     # video_cap = cv2.VideoCapture("rtsp://admin:aver@1234@192.168.220.174:554/Streaming/channels/1")
-    #     is_mark_attendance = False
-    #     previous_id = -1
-    #     while True:
-    #         ret, img = video_cap.read()
-    #         gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #         # features = faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-    #         features = faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-    #         # confidence_threshold =70   # Adjust this threshold according to your dataset
-        
-
-            
-    #         for (x, y, w, h) in features:
-    #             cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 3)
-    #             id, predict = clf.predict(gray_image[y:y+h, x:x+w])
-    #             confidence = int((100 * (1 - predict / 300)))
-
-                
-    #             conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
-    #             my_cursor = conn.cursor()
-    #             my_cursor.execute(f"SELECT id, name, dep FROM student WHERE id = {id}")
-    #             matched_data = my_cursor.fetchone()
-    #             if matched_data:
-    #                 if previous_id!=matched_data[0]:
-    #                     is_mark_attendance = False
-    #                     previous_id = matched_data[0]
-    #                     print("matched_data:", matched_data[0])
-    #             conn.close()
-                
-    #             if matched_data is not None and confidence > 75:
-    #                 i, n, d = matched_data[0], matched_data[1], matched_data[2]
-    #                 cv2.putText(img, f"id:{i}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-    #                 cv2.putText(img, f"name:{n}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-    #                 cv2.putText(img, f"department:{d}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-    
-    #                 if not is_mark_attendance:
-    #                     self.mark_attendance(i, n, d)
-    #                     is_mark_attendance = True
-    #             else:
-    #                 cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
-    #                 cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-    #                 is_mark_attendance = False
-
-    #                 # Display a message for unknown faces
-    #                 cv2.putText(img, "Unknown Face Detected", (x, y+30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 255), 3)
-            
-    #         cv2.imshow("Welcome To Face Recognition", img)
-            
-    #         if cv2.waitKey(1) & 0xFF == ord('q'):
-    #             break
-        
-    #     video_cap.release()
-    #     cv2.destroyAllWindows()
-    
-
     def save_camera(self):
         # Get camera name and IP from the entry fields
         camera_name = self.camera_name_entry.get()
@@ -157,52 +94,46 @@ class CameraApp:
 
         # Get the corresponding IP address from the dictionary
         camera_ip = self.camera_dict.get(selected_camera_name)
-
+        print("face_recognition started")
         # Open the selected camera stream
         cap = cv2.VideoCapture(0)
-        # faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
-        # clf = cv2.face.LBPHFaceRecognizer_create()
-        # clf.read("models/classifier.xml")
         is_mark_attendance = False
         previous_id = -1
         while True:
             ret, img = cap.read()
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # features = faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
             features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-
+            
             for (x, y, w, h) in features:
                 cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 3)
-                id, predict = self.clf.predict(gray_image[y:y+h, x:x+w])
+                emp_id, predict = self.clf.predict(gray_image[y:y+h, x:x+w])
                 confidence = int((100 * (1 - predict / 300)))
-
                 
                 conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
                 my_cursor = conn.cursor()
-                my_cursor.execute(f"SELECT id, name, dep FROM student WHERE id = {id}")
+                my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
                 matched_data = my_cursor.fetchone()
                 if matched_data:
                     if previous_id!=matched_data[0]:
                         is_mark_attendance = False
                         previous_id = matched_data[0]
-                        print("matched_data:", matched_data[0])
+                        # print("matched_data:", matched_data[0])
                 conn.close()
-                if matched_data is not None and confidence > 75:
-                    i, n, d = matched_data[0], matched_data[1], matched_data[2]
-                    cv2.putText(img, f"id:{i}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    cv2.putText(img, f"name:{n}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    cv2.putText(img, f"department:{d}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-    
+                
+                if matched_data is not None and confidence > 50:
+                    # print("is_mark_attendance:",is_mark_attendance)
+                    emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
+                    cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                    cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                    cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                    cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
                     if not is_mark_attendance:
-                        self.mark_attendance(i, n, d)
+                        self.mark_attendance(emp_id, email_id, name, dep)
                         is_mark_attendance = True
                 else:
                     cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
                     cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
                     is_mark_attendance = False
-
-                    # Display a message for unknown faces
-                    cv2.putText(img, "Unknown Face Detected", (x, y+30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 255), 3)
             
             cv2.imshow("Welcome To Face Recognition", img)
             
@@ -211,13 +142,6 @@ class CameraApp:
         
         cap.release()
         cv2.destroyAllWindows()
-        # while True:
-        #     ret, frame = cap.read()
-        #     cv2.imshow(f"Camera Stream: {selected_camera_name}", frame)
-        #     if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         break
-        # cap.release()
-        # cv2.destroyAllWindows()
 
     def preview_camera(self):
         # Get the selected camera name from the dictionary
