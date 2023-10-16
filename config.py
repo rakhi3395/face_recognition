@@ -1,2 +1,2 @@
-DB_PASSWORD = "Verma@12345"
+DB_PASSWORD = "saurabhrakhi@12"
 NO_OF_IMAGE = 50
