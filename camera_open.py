@@ -59,19 +59,28 @@ class CameraApp:
 
     def save_camera(self):
         # Get camera name and IP from the entry fields
-        camera_name = self.camera_name_entry.get()
-        camera_ip = self.camera_ip_entry.get()
+        camera_name = self.camera_name_entry.get().strip()
+        camera_ip = self.camera_ip_entry.get().strip()
+        if camera_ip=="localhost" or camera_ip == "127.0.0.1":
+            camera_ip = 0
+        if camera_name and (camera_ip or camera_ip==0):  # Check if fields are not empty
+            # Attempt to open the camera stream to check if it's working
+            cap = cv2.VideoCapture(camera_ip)
+            if cap.isOpened():
+                # If the camera is working, save its details in the database
+                self.save_to_database(camera_name, camera_ip)
+                cap.release()  # Release the camera
 
-        # Save camera details in the database
-        if camera_name and camera_ip:  # Check if fields are not empty
-            self.save_to_database(camera_name, camera_ip)
-
-            # Clear entry fields and reload camera data
-            self.camera_name_entry.delete(0, tk.END)
-            self.camera_ip_entry.delete(0, tk.END)
-            self.load_camera_data()
+                # Clear entry fields and reload camera data
+                self.camera_name_entry.delete(0, tk.END)
+                self.camera_ip_entry.delete(0, tk.END)
+                self.load_camera_data()
+            else:
+                cap.release()  # Release the camera
+                messagebox.showerror("Error", "Unable to open the camera. Please check the camera IP.")
         else:
             messagebox.showerror("Error", "Camera Name and IP cannot be empty!")
+
 
     def load_camera_data(self):
         # Retrieve camera names and IPs from the database and populate the listbox and dictionary
@@ -96,7 +105,10 @@ class CameraApp:
         camera_ip = self.camera_dict.get(selected_camera_name)
         print("face_recognition started")
         # Open the selected camera stream
-        cap = cv2.VideoCapture(0)
+        # check if local camera
+        if camera_ip=="0":
+            camera_ip=0
+        cap = cv2.VideoCapture(camera_ip)
         is_mark_attendance = False
         previous_id = -1
         while True:
@@ -144,14 +156,20 @@ class CameraApp:
         cv2.destroyAllWindows()
 
     def preview_camera(self):
-        # Get the selected camera name from the dictionary
-        selected_camera_name = self.camera_name_entry.get()
+        # Get the selected camera name from the listbox
+        selected_camera_name = self.camera_listbox.get(self.camera_listbox.curselection())
+        # Get the corresponding IP address from the dictionary
         camera_ip = self.camera_dict.get(selected_camera_name)
         width, height = 600, 500
         # Open the selected camera stream in a preview window
         preview_window = tk.Toplevel(self.master)
         preview_window.title(f"Preview: {selected_camera_name}")
         preview_window.geometry(f"{width}x{height}")
+        print("camera ip:", camera_ip)
+        # check if local camera
+        if camera_ip=="0":
+            camera_ip=0
+        print("camera ip:",camera_ip)
         cap = cv2.VideoCapture(camera_ip)
         while True:
             ret, frame = cap.read()
