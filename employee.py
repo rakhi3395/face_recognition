@@ -81,30 +81,30 @@ class employee:
 
         
         # Employee Details
-        class_Student_frame=LabelFrame(Left_frame,bd=2,bg="white",relief=RIDGE,text="Employee Personal information",font=("times new roman",12,"bold"))
+        class_Student_frame=LabelFrame(Left_frame,bd=2,relief=RIDGE,text="Employee Personal information",font=("times new roman",12,"bold"))
         class_Student_frame.place(x=5,y=240,width=690,height=300)
         
         # employee id
-        employeeID_label=Label(class_Student_frame,text="Employee ID:",font=("times new roman",12,"bold"),bg="white")
+        employeeID_label=Label(class_Student_frame,text="Employee ID:",font=("times new roman",12,"bold"))
         employeeID_label.grid(row=0,column=0,padx=10,sticky=W)
         employeeID_entry=ttk.Entry(class_Student_frame,textvariable=self.var_emp_id,width=20,font=("times new roman",12,"bold"))
         employeeID_entry.grid(row=0,column=1,padx=10,sticky=W)
         
         # employee name
-        employeeName_label=Label(class_Student_frame,text="Employee Name:",font=("times new roman",12,"bold"),bg="white")
+        employeeName_label=Label(class_Student_frame,text="Employee Name:",font=("times new roman",12,"bold"))
         employeeName_label.grid(row=0,column=2,padx=10,pady=5,sticky=W)
         employeeName_entry=ttk.Entry(class_Student_frame,textvariable=self.var_name,width=20,font=("times new roman",12,"bold"))
         employeeName_entry.grid(row=0,column=3,padx=10,pady=5,sticky=W)
         
         # phone
-        phone_label=Label(class_Student_frame,text="Phone No:",font=("times new roman",13,"bold"),bg="white")
+        phone_label=Label(class_Student_frame,text="Phone No:",font=("times new roman",13,"bold"))
         phone_label.grid(row=1,column=0,padx=10,pady=5,sticky=W)
         phone_entry=ttk.Entry(class_Student_frame,textvariable=self.var_phone,width=20,font=("times new roman",13,"bold"))
         phone_entry.grid(row=1,column=1,padx=10,pady=5,sticky=W)
         
         
         # gender
-        gender_label=Label(class_Student_frame,text="Gender:",font=("times new roman",13,"bold"),bg="white")
+        gender_label=Label(class_Student_frame,text="Gender:",font=("times new roman",13,"bold"))
         gender_label.grid(row=2,column=0,padx=10,pady=5,sticky=W)
         
         gender_combo=ttk.Combobox(class_Student_frame,textvariable=self.var_gender,font=("times new roman",12,"bold"),state="readonly")
@@ -114,7 +114,7 @@ class employee:
         
         
         # email
-        email_label=Label(class_Student_frame,text="Email ID:",font=("times new roman",13,"bold"),bg="white")
+        email_label=Label(class_Student_frame,text="Email ID:",font=("times new roman",13,"bold"))
         email_label.grid(row=2,column=2,padx=10,pady=5,sticky=W)
         email_entry=ttk.Entry(class_Student_frame,textvariable=self.var_email_id,width=20,font=("times new roman",13,"bold"))
         email_entry.grid(row=2,column=3,padx=10,pady=5,sticky=W)
@@ -225,6 +225,7 @@ class employee:
 #----------function data--------
     def add_data(self):  
         print("clicked on save button")
+        print(self.var_dep.get(), self.var_name.get(), self.var_emp_id.get(), self.var_email_id.get(), self.var_gender.get(), self.var_phone.get())
         if self.var_radio1.get()=="":
             messagebox.showerror("Error","Please Take a photo sample",parent=self.root)
         if self.var_dep.get()=="select Department" or self.var_name.get()=="" or self.var_emp_id.get()=="" or self.var_email_id.get()=="" or self.var_gender.get()=="" or self.var_phone.get()=="":
@@ -234,9 +235,9 @@ class employee:
                 conn=mysql.connector.connect(host="localhost",username="root",password=DB_PASSWORD,database="face_recognition")
                 my_cursor=conn.cursor()
                 my_cursor.execute("insert into employee values(%s,%s,%s,%s,%s,%s)",(
-                                                                        self.var_dep.get(),
-                                                                        self.var_name.get(),
                                                                         self.var_emp_id.get(),
+                                                                        self.var_name.get(),
+                                                                        self.var_dep.get(),
                                                                         self.var_email_id.get(),
                                                                         self.var_gender.get(),
                                                                         self.var_phone.get()
@@ -268,9 +269,9 @@ class employee:
         content=self.student_table.item(cursor_focus)
         data=content["values"]
         
-        self.var_dep.set(data[0]),
+        self.var_emp_id.set(data[0]),
         self.var_name.set(data[1]),
-        self.var_emp_id.set(data[2]),
+        self.var_dep.set(data[2]),
         self.var_email_id.set(data[3]),
         self.var_gender.set(data[4]),
         self.var_phone.set(data[5])

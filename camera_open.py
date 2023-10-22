@@ -2,6 +2,8 @@ import tkinter as tk
 import mysql.connector
 from tkinter import messagebox
 import cv2
+from datetime import datetime
+import uuid
 from config import DB_PASSWORD
 
 class CameraApp:
@@ -54,7 +56,31 @@ class CameraApp:
         # Load initial camera data
         self.load_camera_data()
 
+            # attendance
+    def mark_attendance(self,emp_id,email_id,name,dep):
+        current_date = datetime.now().date()
+        # print("current_date:",current_date)
+        conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
+        my_cursor = conn.cursor()
+        my_cursor.execute(f"SELECT attendance_id FROM face_recognition.attendance WHERE emp_id = {emp_id} AND date='{current_date}'")
+        fetched_data = my_cursor.fetchone()
+        if fetched_data:
+            # handle checkout case
+            attendance_id = fetched_data[0]
+            checkout_time = datetime.now()
+            my_cursor.execute(f"UPDATE attendance SET checkout_time = '{checkout_time}' WHERE attendance_id = '{attendance_id}'")
+            conn.commit()
+            conn.close()
 
+        else:
+            # handle checkin date
+            attendance_id = str(uuid.uuid4())
+            checkin_time = datetime.now()
+            insert_query = "INSERT INTO attendance (attendance_id, emp_id, date, email_id, name, dep, checkin_time) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            data = (attendance_id, emp_id, current_date, email_id, name, dep, checkin_time)
+            my_cursor.execute(insert_query, data)
+            conn.commit()
+            conn.close()
 
 
     def save_camera(self):
@@ -111,42 +137,59 @@ class CameraApp:
         cap = cv2.VideoCapture(camera_ip)
         is_mark_attendance = False
         previous_id = -1
+        # Define the ROI (Region of Interest) boundaries
+        roi_x, roi_y, roi_width, roi_height = 100, 100, 700, 500
         while True:
             ret, img = cap.read()
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
             
             for (x, y, w, h) in features:
-                cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 3)
-                emp_id, predict = self.clf.predict(gray_image[y:y+h, x:x+w])
-                confidence = int((100 * (1 - predict / 300)))
-                
-                conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
-                my_cursor = conn.cursor()
-                my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
-                matched_data = my_cursor.fetchone()
-                if matched_data:
-                    if previous_id!=matched_data[0]:
+                # Check if the face coordinates are within the ROI
+                if roi_x <= x and x + w <= roi_x + roi_width and roi_y <= y and y + h <= roi_y + roi_height:
+                    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)  # Draw green rectangle on the face
+                    # print("xxxxxxxxxx:")
+                    # print("x:",x)
+                    # print("y:",y)
+                    # print("w:",w)
+                    # print("h:",h)
+                # else:
+                #     cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)  # Draw red rectangle outside the ROI
+                #     print("yyyyyyyyy")
+
+                    emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
+                    confidence = int((100 * (1 - predict / 300)))
+
+                    
+                    conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
+                    my_cursor = conn.cursor()
+                    my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
+                    matched_data = my_cursor.fetchone()
+                    if matched_data:
+                        if previous_id!=matched_data[0]:
+                            is_mark_attendance = False
+                            previous_id = matched_data[0]
+                            # print("matched_data:", matched_data[0])
+                    conn.close()
+                    
+                    if matched_data is not None and confidence > 50:
+                        # print("is_mark_attendance:",is_mark_attendance)
+                        emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
+                        cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                        cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                        cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                        cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                        if not is_mark_attendance:
+                            self.mark_attendance(emp_id, email_id, name, dep)
+                            is_mark_attendance = True
+                    else:
+                        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
+                        cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
                         is_mark_attendance = False
-                        previous_id = matched_data[0]
-                        # print("matched_data:", matched_data[0])
-                conn.close()
-                
-                if matched_data is not None and confidence > 50:
-                    # print("is_mark_attendance:",is_mark_attendance)
-                    emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
-                    cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    if not is_mark_attendance:
-                        self.mark_attendance(emp_id, email_id, name, dep)
-                        is_mark_attendance = True
-                else:
-                    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
-                    cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                    is_mark_attendance = False
             
+            # Draw a red rectangle around the ROI
+            cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_width, roi_y + roi_height), (0, 0, 255), 3)
+
             cv2.imshow("Welcome To Face Recognition", img)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
