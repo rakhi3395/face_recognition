@@ -5,7 +5,9 @@ from tkinter import messagebox
 import numpy as np
 import cv2
 import os
-
+from tensorflow.keras.models import load_model
+from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import SVC
 
 class Train:
     def __init__(self,root):
@@ -34,35 +36,39 @@ class Train:
         
         f_lbl=Label(self.root,image=self.photoimg_bottom)
         f_lbl.place(x=0,y=460,width=1530,height=320)
+        self.face_recognition_model = load_model("models/facenet_keras.h5")
         
-    def train_classifier(self):
-        data_dir=("data")
-        path=[os.path.join(data_dir,file) for file in os.listdir(data_dir)]
-        
-        faces=[]
-        ids=[]
-        
-        
-        for image in path:
-            img=Image.open(image).convert('L')  
-            imageNp=np.array(img,'uint8')
-            print(os.path.split(image))
-            id=int(os.path.split(image)[1].split("_")[1])
-            
-            faces.append(imageNp)
-            ids.append(id)
-            cv2.imshow("Training",imageNp)
-            cv2.waitKey(1)==13
-        ids=np.array(ids)
-        
+    def train_classifier(self):        
         
         # Train the classifier and save
             
-        clf=cv2.face.LBPHFaceRecognizer_create()
-        clf.train(faces,ids)
-        clf.write("models/classifier.xml")
-        cv2.destroyAllWindows()
-        messagebox.showinfo("Result","Training Datasets Completed!!!")
+        # Data directory with labeled subdirectories for each person
+        data_dir = "data"
+
+        # Collect labeled face embeddings and corresponding person IDs
+        embeddings = []
+        labels = []
+
+        for person_dir in os.listdir(data_dir):
+            for image_file in os.listdir(os.path.join(data_dir, person_dir)):
+                image_path = os.path.join(data_dir, person_dir, image_file)
+                img = Image.open(image_path).convert('RGB')
+                img = img.resize((160, 160))
+                face_array = np.array(img) / 255.0  # Normalize
+                embeddings.append(face_recognition_model.predict(np.expand_dims(face_array, axis=0))
+                labels.append(person_dir)
+
+        # Convert labels to integer IDs using LabelEncoder
+        label_encoder = LabelEncoder()
+        labels = label_encoder.fit_transform(labels)
+
+        # Train a classifier (SVM)
+        classifier = SVC(C=1, kernel='linear', probability=True)
+        classifier.fit(embeddings, labels)
+
+        # Save the trained classifier
+        from joblib import dump
+        dump(classifier, 'classifier.pkl')
     
             
         

@@ -5,6 +5,9 @@ import cv2
 from datetime import datetime
 import uuid
 from config import DB_PASSWORD
+from tensorflow.keras.models import load_model
+from tensorflow.image import resize
+from tensorflow.keras.preprocessing.image import img_to_array
 
 class CameraApp:
     def __init__(self, master):
@@ -13,6 +16,7 @@ class CameraApp:
         self.master.geometry("800x500+300+100")
         self.create_ui()
         self.faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
+        self.face_recognition_model = load_model('models/facenet_keras.h5')  # Load FaceNet model
         self.clf = cv2.face.LBPHFaceRecognizer_create()
         self.clf.read("models/classifier.xml")
 
@@ -156,9 +160,17 @@ class CameraApp:
                 # else:
                 #     cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)  # Draw red rectangle outside the ROI
                 #     print("yyyyyyyyy")
+                    # Use FaceNet for face recognition
+                    face_array = img_to_array(cv2.resize(gray_image[y:y + h, x:x + w], (160, 160)) / 255.0)
+                    face_array = np.expand_dims(face_array, axis=0)
+                    face_embeddings = self.face_recognition_model.predict(face_array)
 
-                    emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
+                    # Perform face recognition based on embeddings
+                    emp_id, predict = self.face_recognition_model.predict(face_embeddings)
                     confidence = int((100 * (1 - predict / 300)))
+
+                    # emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
+                    # confidence = int((100 * (1 - predict / 300)))
 
                     
                     conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
