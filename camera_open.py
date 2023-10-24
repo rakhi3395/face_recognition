@@ -5,6 +5,7 @@ import cv2
 from datetime import datetime
 import uuid
 from config import DB_PASSWORD
+from mtcnn import MTCNN
 
 class CameraApp:
     def __init__(self, master):
@@ -12,9 +13,10 @@ class CameraApp:
         self.master.title("Camera App")
         self.master.geometry("800x500+300+100")
         self.create_ui()
-        self.faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
+        # self.faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
         self.clf = cv2.face.LBPHFaceRecognizer_create()
         self.clf.read("models/classifier.xml")
+        self.detector = MTCNN()
 
     def create_ui(self):
         # Frame for the form
@@ -142,50 +144,44 @@ class CameraApp:
         while True:
             ret, img = cap.read()
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-            
-            for (x, y, w, h) in features:
+            # features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
+            faces = self.detector.detect_faces(img)
+            for face in faces:
                 # Check if the face coordinates are within the ROI
-                if roi_x <= x and x + w <= roi_x + roi_width and roi_y <= y and y + h <= roi_y + roi_height:
-                    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)  # Draw green rectangle on the face
-                    # print("xxxxxxxxxx:")
-                    # print("x:",x)
-                    # print("y:",y)
-                    # print("w:",w)
-                    # print("h:",h)
-                # else:
-                #     cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)  # Draw red rectangle outside the ROI
-                #     print("yyyyyyyyy")
+                x, y, w, h = face['box']
+                confidence = face['confidence']
+                if confidence > 0.5:  # Adjust the threshold as needed
+                    if roi_x <= x and x + w <= roi_x + roi_width and roi_y <= y and y + h <= roi_y + roi_height:
+                        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)  # Draw green rectangle on the face
+                        emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
+                        confidence = int((100 * (1 - predict / 300)))
 
-                    emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
-                    confidence = int((100 * (1 - predict / 300)))
-
-                    
-                    conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
-                    my_cursor = conn.cursor()
-                    my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
-                    matched_data = my_cursor.fetchone()
-                    if matched_data:
-                        if previous_id!=matched_data[0]:
+                        
+                        conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
+                        my_cursor = conn.cursor()
+                        my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
+                        matched_data = my_cursor.fetchone()
+                        if matched_data:
+                            if previous_id!=matched_data[0]:
+                                is_mark_attendance = False
+                                previous_id = matched_data[0]
+                                # print("matched_data:", matched_data[0])
+                        conn.close()
+                        
+                        if matched_data is not None and confidence > 50:
+                            # print("is_mark_attendance:",is_mark_attendance)
+                            emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
+                            cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                            cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                            cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                            cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                            if not is_mark_attendance:
+                                self.mark_attendance(emp_id, email_id, name, dep)
+                                is_mark_attendance = True
+                        else:
+                            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
+                            cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
                             is_mark_attendance = False
-                            previous_id = matched_data[0]
-                            # print("matched_data:", matched_data[0])
-                    conn.close()
-                    
-                    if matched_data is not None and confidence > 50:
-                        # print("is_mark_attendance:",is_mark_attendance)
-                        emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
-                        cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                        cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                        cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                        cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                        if not is_mark_attendance:
-                            self.mark_attendance(emp_id, email_id, name, dep)
-                            is_mark_attendance = True
-                    else:
-                        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
-                        cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                        is_mark_attendance = False
             
             # Draw a red rectangle around the ROI
             cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_width, roi_y + roi_height), (0, 0, 255), 3)
