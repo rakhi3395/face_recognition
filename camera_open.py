@@ -6,7 +6,10 @@ from datetime import datetime
 import uuid
 from config import DB_PASSWORD
 from mtcnn import MTCNN
-
+import numpy as np
+import json
+from scipy.spatial.distance import cosine
+from deepface.basemodels import VGGFace
 class CameraApp:
     def __init__(self, master):
         self.master = master
@@ -14,9 +17,14 @@ class CameraApp:
         self.master.geometry("800x500+300+100")
         self.create_ui()
         # self.faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
-        self.clf = cv2.face.LBPHFaceRecognizer_create()
-        self.clf.read("models/classifier.xml")
-        self.detector = MTCNN()
+        # Load VGGFace model for face recognition
+        self.model_path = "models/embeddings.npy"
+        self.img_size = (224,224)
+        self.mtcnn = MTCNN()
+        self.embeddings = np.load(self.model_path, allow_pickle=True).item()
+        self.model = VGGFace.loadModel()
+
+
 
     def create_ui(self):
         # Frame for the form
@@ -124,8 +132,34 @@ class CameraApp:
             self.camera_listbox.insert(tk.END, camera_name)
             self.camera_dict[camera_name] = camera_ip
         conn.close()
+    def find_recognized_face(self , detected_embedding):
+        threshold=0.6
+        # Initialize variables to keep track of the best match
+        best_match = None
+        best_score = 0.5  # Set an initial threshold
+        label  = None
+        for idx in self.embeddings:
+            # Calculate the similarity score (lower is better)
+            known_embedding = self.embeddings[idx]
 
+            known_embedding = known_embedding.ravel().astype(np.float32)
+            detected_embedding = detected_embedding.ravel().astype(np.float32)
+
+            known_embedding /= np.linalg.norm(known_embedding)
+            detected_embedding /= np.linalg.norm(detected_embedding)
+
+            # print(detected_embedding)
+            score = 1- cosine(known_embedding, detected_embedding)
+
+            # Check if the score is better than the current best match
+            if score > best_score:
+                best_score = score
+                best_match = known_embedding
+                label = idx
+
+        return label, best_score
     def open_camera(self):
+        # DeepFace.stream(db_path = "data")
         # Get the selected camera name from the listbox
         selected_camera_name = self.camera_listbox.get(self.camera_listbox.curselection())
 
@@ -143,9 +177,9 @@ class CameraApp:
         roi_x, roi_y, roi_width, roi_height = 100, 100, 700, 500
         while True:
             ret, img = cap.read()
-            gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-            faces = self.detector.detect_faces(img)
+            faces = self.mtcnn.detect_faces(img)
             for face in faces:
                 # Check if the face coordinates are within the ROI
                 x, y, w, h = face['box']
@@ -153,31 +187,48 @@ class CameraApp:
                 if confidence > 0.5:  # Adjust the threshold as needed
                     if roi_x <= x and x + w <= roi_x + roi_width and roi_y <= y and y + h <= roi_y + roi_height:
                         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)  # Draw green rectangle on the face
-                        emp_id, predict = self.clf.predict(gray_image[y:y + h, x:x + w])
-                        confidence = int((100 * (1 - predict / 300)))
+                        face_img = img[y:y+h, x:x+w]
+                        face_img = cv2.resize(face_img, self.img_size)
+                        # face_img = np.expand_dims(face_img, axis=0)  # Add a batch dimension
+                        # Make predictions using the loaded model
+                        # face_img = preprocess_input(fa÷ce_img)
+                        #face recognition
+                        face_img = face_img / 255.0  # Normalize the image
 
-                        
-                        conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
-                        my_cursor = conn.cursor()
-                        my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
-                        matched_data = my_cursor.fetchone()
-                        if matched_data:
-                            if previous_id!=matched_data[0]:
-                                is_mark_attendance = False
-                                previous_id = matched_data[0]
-                                # print("matched_data:", matched_data[0])
-                        conn.close()
-                        
-                        if matched_data is not None and confidence > 50:
-                            # print("is_mark_attendance:",is_mark_attendance)
-                            emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
-                            cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                            cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                            cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                            cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
-                            if not is_mark_attendance:
-                                self.mark_attendance(emp_id, email_id, name, dep)
-                                is_mark_attendance = True
+                        # Add batch dimension
+                        face_img = np.expand_dims(face_img, axis=0)
+                        predictions = self.model.predict(face_img)
+                        print("predict:",predictions)
+
+                        # Assuming your model was trained with class labels, you can use np.argmax to get the predicted class
+                        predicted_class, confidence_score = self.find_recognized_face(predictions)
+
+                        print("predicted_class:",predicted_class)
+                        print("confidence_score:",confidence_score)
+                        # Compare the detected face embeddings with known face embeddings
+                        if confidence_score > 0.8 :
+                            emp_id = str(int(predicted_class))                     
+                            conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
+                            my_cursor = conn.cursor()
+                            my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
+                            matched_data = my_cursor.fetchone()
+                            if matched_data:
+                                if previous_id!=matched_data[0]:
+                                    is_mark_attendance = False
+                                    previous_id = matched_data[0]
+                                    # print("matched_data:", matched_data[0])
+                            conn.close()
+                            
+                            if matched_data is not None:
+                                # print("is_mark_attendance:",is_mark_attendance)
+                                emp_id, email_id, name, dep = matched_data[0], matched_data[1], matched_data[2], matched_data[3]
+                                cv2.putText(img, f"emp_id:{emp_id}", (x, y-75), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                                cv2.putText(img, f"email_id:{email_id}", (x, y-55), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                                cv2.putText(img, f"name:{name}", (x, y-30), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                                cv2.putText(img, f"department:{dep}", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
+                                if not is_mark_attendance:
+                                    self.mark_attendance(emp_id, email_id, name, dep)
+                                    is_mark_attendance = True
                         else:
                             cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
                             cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)

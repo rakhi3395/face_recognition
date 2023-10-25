@@ -7,6 +7,7 @@ import cv2
 from config import DB_PASSWORD, NO_OF_IMAGE
 import time
 import os
+from mtcnn import MTCNN
 class employee:
     def __init__(self,root):
         self.root=root
@@ -221,6 +222,7 @@ class employee:
         self.student_table.pack(fill=BOTH,expand=1)
         self.student_table.bind("<ButtonRelease>",self.get_cursor)
         self.fetch_data()
+        self.mtcnn = MTCNN()
         
 #----------function data--------
     def add_data(self):  
@@ -361,15 +363,15 @@ class employee:
                 print("code is generating the dataset for id:", self.var_emp_id.get())
                 conn=mysql.connector.connect(host="localhost",username="root",password=DB_PASSWORD,database="face_recognition")
                 my_cursor=conn.cursor()
-                my_cursor.execute("select * from employee")
+                my_cursor.execute("select * from face_recognition.employee where emp_id={};".format(self.var_emp_id.get()))
                 myresult=my_cursor.fetchall()
-                id=0
-                for x in myresult:
-                    id+=1
+                # if len(myresult):
+                #     messagebox.showerror("Error","emp id is already exists",parent=self.root)
+                #     conn.close()
+                # else:
                 id = self.var_emp_id.get()
-                 
-                conn.close()
-                face_cascade = cv2.CascadeClassifier('models/haarcascade_frontalface_default.xml')
+                
+                # face_cascade = cv2.CascadeClassifier('models/haarcascade_frontalface_default.xml')
 
                 # Open the camera and capture frames
                 cap = cv2.VideoCapture(0)
@@ -377,39 +379,32 @@ class employee:
                 # Create a counter variable to keep track of the number of saved face samples
                 count = 0
                 print("current id of the photo:", id)
-                while True:
+                while count < NO_OF_IMAGE:
                     
                     # Read the frame from the camera
-                    ret, frame = cap.read()
-
+                    ret, img = cap.read()
+                    
                     # Convert the captured frame to grayscale
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
                     # Detect the faces in the grayscale image using the Haar Cascade classifier
-                    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-
-                    # Draw rectangles around the detected faces and save the cropped faces as separate image files
-                    for (x, y, w, h) in faces:
-                        # Draw rectangle around the face
-                        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-
-                        # Crop the face region from the original frame
-                        face = frame[y:y+h, x:x+w]
-
-                        # Save the cropped face as a separate image file
-                        if count < NO_OF_IMAGE:
-                            cv2.imwrite(f'data/user_{id}_{count}.jpg', face)
+                    faces = self.mtcnn.detect_faces(img)
+                    if len(faces):
+                        x, y, w, h = faces[0]['box']
+                        confidence = faces[0]['confidence']
+                        if confidence > 0.5:  # Adjust the threshold as needed
+                            # Draw rectangle around the face
+                            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                            if not os.path.exists(os.path.join(self.data_dir,id)):
+                                # If it doesn't exist, create the folder
+                                os.makedirs(os.path.join(self.data_dir,id))
+                            cv2.imwrite(f'data/{id}/{count}.jpg', img)
                             count += 1
-                        else:
-                            # Release the camera and close OpenCV windows when done
-                            cap.release()
-                            cv2.destroyAllWindows()
-                            # exit(0)  # Exit the script
-                        print(count)
+                            print(count)
                     if count == NO_OF_IMAGE or count > NO_OF_IMAGE :
                         break
                     # Display the resulting image with the detected faces
-                    cv2.imshow('Video', frame)
+                    cv2.imshow('Video', img)
                     # # Exit the loop and release the camera when a key is pressed
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         print("q button pressed")
