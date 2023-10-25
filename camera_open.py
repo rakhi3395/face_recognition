@@ -206,7 +206,7 @@ class CameraApp:
                         print("predicted_class:",predicted_class)
                         print("confidence_score:",confidence_score)
                         # Compare the detected face embeddings with known face embeddings
-                        if confidence_score > 0.8 :
+                        if confidence_score > 0.75 :
                             emp_id = str(int(predicted_class))                     
                             conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
                             my_cursor = conn.cursor()
