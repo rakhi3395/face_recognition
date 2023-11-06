@@ -223,6 +223,7 @@ class employee:
         self.student_table.bind("<ButtonRelease>",self.get_cursor)
         self.fetch_data()
         self.mtcnn = MTCNN()
+        self.data_dir = "data"
         
 #----------function data--------
     def add_data(self):  
