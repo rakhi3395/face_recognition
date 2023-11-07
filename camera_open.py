@@ -5,11 +5,15 @@ import cv2
 from datetime import datetime
 import uuid
 from config import DB_PASSWORD
-from mtcnn import MTCNN
-import numpy as np
-import json
-from scipy.spatial.distance import cosine
-from deepface.basemodels import VGGFace
+# from mtcnn import MTCNN
+# import face_recognition
+# import numpy as np
+# import json
+# from scipy.spatial.distance import cosine
+from deepface import DeepFace
+# import warnings
+# warnings.filterwarnings("ignore")
+import os
 class CameraApp:
     def __init__(self, master):
         self.master = master
@@ -18,11 +22,29 @@ class CameraApp:
         self.create_ui()
         # self.faceCascade = cv2.CascadeClassifier("models/haarcascade_frontalface_default.xml")
         # Load VGGFace model for face recognition
-        self.model_path = "models/embeddings.npy"
-        self.img_size = (224,224)
-        self.mtcnn = MTCNN()
-        self.embeddings = np.load(self.model_path, allow_pickle=True).item()
-        self.model = VGGFace.loadModel()
+        # self.model_path = "models/embeddings.npy"
+        # self.img_size = (224,224)
+        self.models = [
+                            "VGG-Face", 
+                            "Facenet", 
+                            "Facenet512", 
+                            "OpenFace", 
+                            "DeepFace", 
+                            "DeepID", 
+                            "ArcFace", 
+                            "Dlib", 
+                            "SFace",
+                            ]
+        self.metrics = ["cosine", "euclidean", "euclidean_l2"]
+        self.model_name = self.models[2]
+        self.metrics_name = self.metrics[2]
+
+        representations_file = 'data/representations_facenet512.pkl'
+
+        # Check if the file exists and then delete it
+        if os.path.exists(representations_file):
+            os.remove(representations_file)
+            print(f"Deleted {representations_file}")
 
 
 
@@ -44,11 +66,11 @@ class CameraApp:
         self.camera_ip_entry.place(x=200, y=120)
 
         # Blue-colored Save button with larger font size
-        save_button = tk.Button(form_frame, text="Save", command=self.save_camera, bg="blue", fg="white", font=("Arial", 12))
+        save_button = tk.Button(form_frame, text="Save", command=self.save_camera, bg="blue", font=("Arial", 12))
         save_button.place(x=260, y=150)
 
         # Green-colored Preview button with larger font size
-        open_camera_button = tk.Button(form_frame, text="Open Camera", command=self.open_camera, bg="green", fg="white", font=("Arial", 12))
+        open_camera_button = tk.Button(form_frame, text="Open Camera", command=self.open_camera, bg="green", font=("Arial", 12))
         open_camera_button.place(x=50, y=240)
 
         # Listbox to display saved cameras
@@ -132,32 +154,6 @@ class CameraApp:
             self.camera_listbox.insert(tk.END, camera_name)
             self.camera_dict[camera_name] = camera_ip
         conn.close()
-    def find_recognized_face(self , detected_embedding):
-        threshold=0.6
-        # Initialize variables to keep track of the best match
-        best_match = None
-        best_score = 0.5  # Set an initial threshold
-        label  = None
-        for idx in self.embeddings:
-            # Calculate the similarity score (lower is better)
-            known_embedding = self.embeddings[idx]
-
-            known_embedding = known_embedding.ravel().astype(np.float32)
-            detected_embedding = detected_embedding.ravel().astype(np.float32)
-
-            known_embedding /= np.linalg.norm(known_embedding)
-            detected_embedding /= np.linalg.norm(detected_embedding)
-
-            # print(detected_embedding)
-            score = 1- cosine(known_embedding, detected_embedding)
-
-            # Check if the score is better than the current best match
-            if score > best_score:
-                best_score = score
-                best_match = known_embedding
-                label = idx
-
-        return label, best_score
     def open_camera(self):
         # DeepFace.stream(db_path = "data")
         # Get the selected camera name from the listbox
@@ -177,37 +173,31 @@ class CameraApp:
         roi_x, roi_y, roi_width, roi_height = 100, 100, 700, 500
         while True:
             ret, img = cap.read()
-            # gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            rgb_frame = img[:, :, ::-1]
             # features = self.faceCascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=10)
-            faces = self.mtcnn.detect_faces(img)
-            for face in faces:
+            detected_faces = DeepFace.find(
+                img_path=rgb_frame,
+                db_path="data",
+                model_name=self.models[2],
+                distance_metric=self.metrics[2],
+                enforce_detection=False
+            )
+            for face in detected_faces:
                 # Check if the face coordinates are within the ROI
-                x, y, w, h = face['box']
-                confidence = face['confidence']
-                if confidence > 0.5:  # Adjust the threshold as needed
+                # print(face)
+                if len(face):
+                    x, y, w, h = face['source_x'][0],face['source_y'][0],face['source_w'][0],face['source_h'][0]
+                    confidence_score = face['Facenet512_euclidean_l2'][0]
+                    predicted_class = face['identity'][0].split("/")[1]
+                    # if confidence > 0.5:  # Adjust the threshold as needed
                     if roi_x <= x and x + w <= roi_x + roi_width and roi_y <= y and y + h <= roi_y + roi_height:
                         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)  # Draw green rectangle on the face
-                        face_img = img[y:y+h, x:x+w]
-                        face_img = cv2.resize(face_img, self.img_size)
-                        # face_img = np.expand_dims(face_img, axis=0)  # Add a batch dimension
-                        # Make predictions using the loaded model
-                        # face_img = preprocess_input(fa÷ce_img)
-                        #face recognition
-                        face_img = face_img / 255.0  # Normalize the image
-
-                        # Add batch dimension
-                        face_img = np.expand_dims(face_img, axis=0)
-                        predictions = self.model.predict(face_img)
-                        print("predict:",predictions)
-
-                        # Assuming your model was trained with class labels, you can use np.argmax to get the predicted class
-                        predicted_class, confidence_score = self.find_recognized_face(predictions)
 
                         print("predicted_class:",predicted_class)
                         print("confidence_score:",confidence_score)
                         # Compare the detected face embeddings with known face embeddings
-                        if confidence_score > 0.75 :
-                            emp_id = str(int(predicted_class))                     
+                        if confidence_score > 0.3 : 
+                            emp_id = predicted_class                  
                             conn = mysql.connector.connect(host="localhost", username="root", password=DB_PASSWORD, database="face_recognition")
                             my_cursor = conn.cursor()
                             my_cursor.execute(f"SELECT emp_id, email_id, name, dep FROM employee WHERE emp_id = {emp_id}")
@@ -233,9 +223,9 @@ class CameraApp:
                             cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 3)
                             cv2.putText(img, "Unknown Face", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255, 255, 255), 3)
                             is_mark_attendance = False
-            
+                    
             # Draw a red rectangle around the ROI
-            cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_width, roi_y + roi_height), (0, 0, 255), 3)
+            # cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_width, roi_y + roi_height), (0, 0, 255), 3)
 
             cv2.imshow("Welcome To Face Recognition", img)
             

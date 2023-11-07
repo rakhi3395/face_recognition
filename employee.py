@@ -7,7 +7,7 @@ import cv2
 from config import DB_PASSWORD, NO_OF_IMAGE
 import time
 import os
-from mtcnn import MTCNN
+# from mtcnn import MTCNN
 class employee:
     def __init__(self,root):
         self.root=root
@@ -147,7 +147,7 @@ class employee:
         btn_frame1=Frame(class_Student_frame,bd=2,relief=RIDGE,bg="white")
         btn_frame1.place(x=0,y=180,width=685,height=36)
         
-        take_photo_btn=Button(btn_frame1,command=self.generate_dataset,text="Take photo sample",width=35,font=("times new roman",13,"bold"),bg="blue",fg="white")
+        take_photo_btn=Button(btn_frame1,command=self.start_camera,text="Take photo sample",width=35,font=("times new roman",13,"bold"),bg="blue",fg="white")
         take_photo_btn.grid(row=0,column=0) 
         
         update_photo_btn=Button(btn_frame1,text="Update photo sample",width=35,font=("times new roman",13,"bold"),bg="blue",fg="white")
@@ -222,8 +222,17 @@ class employee:
         self.student_table.pack(fill=BOTH,expand=1)
         self.student_table.bind("<ButtonRelease>",self.get_cursor)
         self.fetch_data()
-        self.mtcnn = MTCNN()
+        # self.mtcnn = MTCNN()
         self.data_dir = "data"
+        self.cap = None
+        self.frame = None
+        # self.show_frame()
+        # Camera feed label
+        self.camera_label = Label(self.root)
+        self.camera_label.pack()
+        self.capture_image_btn = Button(self.root, text="Capture Image", command=self.generate_dataset)
+        self.capture_image_btn.place(x=10, y=40)
+        self.capture_image_btn.pack_forget()
         
 #----------function data--------
     def add_data(self):  
@@ -353,7 +362,34 @@ class employee:
             self.var_phone.set(""),
             self.var_emp_id.set("")
             
+    def start_camera(self):
+        try:
+            self.cap = cv2.VideoCapture(0)
+            self.show_frame()
+
             
+            self.capture_image_btn.pack()
+
+            self.root.bind('q', self.close_camera)
+        except Exception as e:
+            print(e)
+
+    def show_frame(self):
+        ret, frame = self.cap.read()
+        if ret:
+            self.frame = frame
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = Image.fromarray(frame)
+            frame = ImageTk.PhotoImage(frame)
+            self.camera_label.imgtk = frame
+            self.camera_label.configure(image=frame)
+            self.camera_label.after(10, self.show_frame)
+    def close_camera(self):
+        if self.cap.isOpened():
+            self.cap.release()
+        # Hide the camera frame or label, assuming self.camera_label is the widget displaying the camera feed
+        self.camera_label.pack_forget()
+ 
             
 # generate data set or take photo sample 
     def generate_dataset(self):
@@ -366,63 +402,19 @@ class employee:
                 my_cursor=conn.cursor()
                 my_cursor.execute("select * from face_recognition.employee where emp_id={};".format(self.var_emp_id.get()))
                 myresult=my_cursor.fetchall()
-                # if len(myresult):
-                #     messagebox.showerror("Error","emp id is already exists",parent=self.root)
-                #     conn.close()
-                # else:
-                id = self.var_emp_id.get()
-                
-                # face_cascade = cv2.CascadeClassifier('models/haarcascade_frontalface_default.xml')
-
-                # Open the camera and capture frames
-                cap = cv2.VideoCapture(0)
-
-                # Create a counter variable to keep track of the number of saved face samples
-                count = 0
-                print("current id of the photo:", id)
-                while count < NO_OF_IMAGE:
-                    
-                    # Read the frame from the camera
-                    ret, img = cap.read()
-                    
-                    # Convert the captured frame to grayscale
-                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-                    # Detect the faces in the grayscale image using the Haar Cascade classifier
-                    faces = self.mtcnn.detect_faces(img)
-                    if len(faces):
-                        x, y, w, h = faces[0]['box']
-                        confidence = faces[0]['confidence']
-                        if confidence > 0.5:  # Adjust the threshold as needed
-                            # Draw rectangle around the face
-                            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                            if not os.path.exists(os.path.join(self.data_dir,id)):
-                                # If it doesn't exist, create the folder
-                                os.makedirs(os.path.join(self.data_dir,id))
-                            cv2.imwrite(f'data/{id}/{count}.jpg', img)
-                            count += 1
-                            print(count)
-                    if count == NO_OF_IMAGE or count > NO_OF_IMAGE :
-                        break
-                    # Display the resulting image with the detected faces
-                    cv2.imshow('Video', img)
-                    # # Exit the loop and release the camera when a key is pressed
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print("q button pressed")
-                        break
-                    
-                    time.sleep(1) #wait for 1 sec
-
-                # Release the camera and destroy all windows
-                cap.release()
-                cv2.destroyAllWindows()
-                # cap.release()
-                # cv2.destroyAllWindows()
-                messagebox.showinfo("Result","Generating data sets complete!!!!", parent=self.root)
+                if self.frame is not None:
+                    id = self.var_emp_id.get()
+                    if not os.path.exists(os.path.join(self.data_dir,id)):
+                        # If it doesn't exist, create the folder
+                        os.makedirs(os.path.join(self.data_dir,id))
+                    count = len(os.listdir(os.path.join(self.data_dir, id)))
+                    cv2.imwrite(f'data/{id}/{count}.jpg', self.frame)
+                    messagebox.showinfo("Result", "Image captured and saved!", parent=self.root)
+                else:
+                    messagebox.showerror("Error", "Start the camera feed before capturing an image.", parent=self.root)
             except Exception as es:
                 print(es)
-                messagebox.showerror("Error",f"Due To:{str(es)}",parent=self.root)
-                
+                messagebox.showerror("Error",f"Due To:{str(es)}",parent=self.root)                
                 
         
                    
